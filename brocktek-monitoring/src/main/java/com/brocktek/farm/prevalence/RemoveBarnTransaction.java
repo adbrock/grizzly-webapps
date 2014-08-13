@@ -7,7 +7,7 @@ import org.prevayler.Transaction;
 
 import com.brocktek.farm.model.Barn;
 
-public class RemoveBarnTransaction implements Transaction<ConcurrentHashMap<String, Barn>> {
+public class RemoveBarnTransaction implements Transaction<ConcurrentHashMap<Long, Barn>> {
 	private static final long serialVersionUID = -5635994338388468722L;
 	private Barn barn;
 
@@ -16,7 +16,7 @@ public class RemoveBarnTransaction implements Transaction<ConcurrentHashMap<Stri
 	}
 
 	@Override
-	public void executeOn(ConcurrentHashMap<String, Barn> prevalentSystem, Date executionTime) {
+	public void executeOn(ConcurrentHashMap<Long, Barn> prevalentSystem, Date executionTime) {
 		prevalentSystem.remove(barn.getAddress64());
 	}
 }

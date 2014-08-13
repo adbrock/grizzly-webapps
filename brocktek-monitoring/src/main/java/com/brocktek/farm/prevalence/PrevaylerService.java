@@ -9,9 +9,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
-import javafx.collections.FXCollections;
-import javafx.collections.ObservableList;
-
 import org.prevayler.Prevayler;
 import org.prevayler.PrevaylerFactory;
 
@@ -26,22 +23,26 @@ import com.google.inject.Singleton;
 
 @Singleton
 public class PrevaylerService implements ZigbeeFrameListener {
-	private Prevayler<ConcurrentHashMap<String, Barn>> prevayler;
-	private ObservableList<Barn> observableBarnList = FXCollections.observableArrayList();
+	private Prevayler<ConcurrentHashMap<Long, Barn>> prevayler;
 
 	@Inject ZigbeeService zigbeeService;
 	@Inject ScheduledExecutorService scheduleService;
 	@Inject ProblemService problemService;
 
 	public void start() throws Exception {
-		prevayler = PrevaylerFactory.createPrevayler(new ConcurrentHashMap<String, Barn>(), "DATA/Barns");
-		observableBarnList.addAll(getBarnsAsList());
+		prevayler = PrevaylerFactory.createPrevayler(new ConcurrentHashMap<Long, Barn>(), "DATA/Barns");
 		zigbeeService.addFrameListener(this);
+
+		for (Entry<Long, Barn> entry : prevayler.prevalentSystem().entrySet()) {
+			if (entry.getValue().getTimestamp() != null)
+				prevayler.execute(new SetBarnStatusOfflineTransaction(entry.getValue(), entry.getValue().getTimestamp()));
+			prevayler.execute(new SetBarnStatusOfflineTransaction(entry.getValue(), Instant.now()));
+		}
 
 		Runnable pollBarns = new Runnable() {
 			@Override
 			public void run() {
-				for (Entry<String, Barn> entry : prevayler.prevalentSystem().entrySet()) {
+				for (Entry<Long, Barn> entry : prevayler.prevalentSystem().entrySet()) {
 					if (entry.getValue().isOnline()) {
 						if (Instant.now().minusSeconds(45).compareTo(entry.getValue().getTimestamp()) > 0) {
 							prevayler.execute(new SetBarnStatusOfflineTransaction(entry.getValue(), Instant.now()));
@@ -73,25 +74,20 @@ public class PrevaylerService implements ZigbeeFrameListener {
 
 	public void addBarn(Barn barn) {
 		prevayler.execute(new AddBarnTransaction(barn));
-		observableBarnList.add(barn);
+		prevayler.execute(new SetBarnStatusOfflineTransaction(barn, Instant.now()));
 	}
 
 	public void removeBarn(Barn barn) {
 		prevayler.execute(new RemoveBarnTransaction(barn));
-		observableBarnList.remove(barn);
 	}
 
 	public Barn getBarn(long address64) {
 		return prevayler.prevalentSystem().get(address64);
 	}
 
-	public ObservableList<Barn> getBarnsAsObservableList() {
-		return observableBarnList;
-	}
-
 	public List<Barn> getBarnsAsList() {
 		List<Barn> barnList = new ArrayList<Barn>(prevayler.prevalentSystem().size());
-		for (Entry<String, Barn> entry : prevayler.prevalentSystem().entrySet()) {
+		for (Entry<Long, Barn> entry : prevayler.prevalentSystem().entrySet()) {
 			barnList.add(entry.getValue());
 		}
 		Collections.sort(barnList);
@@ -100,6 +96,7 @@ public class PrevaylerService implements ZigbeeFrameListener {
 
 	@Override
 	public void frameReceived(ZigbeeFrame frame) {
+		List<Barn> barns = getBarnsAsList();
 		if (frame instanceof DataSampleFrame) {
 			DataSampleFrame dataFrame = (DataSampleFrame) frame;
 			Barn barn = prevayler.prevalentSystem().get(dataFrame.getAddress64());
@@ -107,6 +104,8 @@ public class PrevaylerService implements ZigbeeFrameListener {
 				Instant timestamp = dataFrame.getTimestamp();
 				double wetBulbTemp = (103 * ((double) dataFrame.getAnalog1() / 256) - .85);
 				double dryBulbTemp = (103 * ((double) dataFrame.getAnalog2() / 256) - .85);
+				if (!barn.isOnline())
+					prevayler.execute(new SetBarnStatusOfflineTransaction(barn, timestamp));
 				prevayler.execute(new UpdateBarnTempTransaction(barn, timestamp, wetBulbTemp, dryBulbTemp));
 			}
 		}

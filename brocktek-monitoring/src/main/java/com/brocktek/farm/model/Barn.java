@@ -6,9 +6,9 @@ import java.util.NoSuchElementException;
 import java.util.SortedSet;
 import java.util.TreeSet;
 
-import com.brocktek.zigbee.ZigbeeNode;
+import com.brocktek.xbee.XbeeNode;
 
-public class Barn implements Serializable, Comparable<Barn>, ZigbeeNode {
+public class Barn extends XbeeNode implements Serializable, Comparable<Barn> {
 	private static final long serialVersionUID = -901361627723043662L;
 
 	private SortedSet<BarnUpdate> updateSet = new TreeSet<BarnUpdate>();
@@ -16,29 +16,7 @@ public class Barn implements Serializable, Comparable<Barn>, ZigbeeNode {
 	private double wetBulbTemp;
 	private double dryBulbTemp;
 	private boolean online;
-	private short address16;
-	private String address64;
 	private String id;
-
-	@Override
-	public short getAddress16() {
-		return this.address16;
-	}
-
-	@Override
-	public void setAddress16(short address16) {
-		this.address16 = address16;
-	}
-
-	@Override
-	public String getAddress64() {
-		return address64;
-	}
-
-	@Override
-	public void setAddress64(String address64) {
-		this.address64 = address64;
-	}
 
 	public void setId(String id) {
 		this.id = id;
@@ -103,7 +81,7 @@ public class Barn implements Serializable, Comparable<Barn>, ZigbeeNode {
 		if (id != null) {
 			return id;
 		}
-		return this.address64;
+		return String.format("%16s", Long.toHexString(this.getAddress64()).replace(" ", "0").toUpperCase());
 	}
 
 	@Override

@@ -8,7 +8,7 @@ import org.prevayler.Transaction;
 
 import com.brocktek.farm.model.Barn;
 
-public class UpdateBarnTempTransaction implements Transaction<ConcurrentHashMap<String, Barn>> {
+public class UpdateBarnTempTransaction implements Transaction<ConcurrentHashMap<Long, Barn>> {
 	private static final long serialVersionUID = 4593408605990412805L;
 	private Barn barn;
 	private Instant timestamp;
@@ -23,7 +23,7 @@ public class UpdateBarnTempTransaction implements Transaction<ConcurrentHashMap<
 	}
 
 	@Override
-	public void executeOn(ConcurrentHashMap<String, Barn> prevalentSystem, Date executionTime) {
+	public void executeOn(ConcurrentHashMap<Long, Barn> prevalentSystem, Date executionTime) {
 		prevalentSystem.get(barn.getAddress64()).updateTemperature(timestamp, wetBulbTemp, dryBulbTemp);
 	}
 }

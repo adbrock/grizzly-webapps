@@ -5,7 +5,6 @@ import java.time.Instant;
 
 public class BarnUpdate implements Serializable, Comparable<BarnUpdate> {
 	private static final long serialVersionUID = -5173549260692319275L;
-
 	private final Instant timestamp;
 	private final double wetBulbTemp;
 	private final double dryBulbTemp;

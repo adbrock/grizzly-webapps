@@ -1,25 +1,25 @@
 package com.brocktek.farm.server.resources;
 
 import java.lang.reflect.Type;
+import java.math.BigDecimal;
 import java.time.Instant;
-import java.time.temporal.ChronoUnit;
 import java.util.List;
-import java.util.Map;
 import java.util.SortedSet;
+import java.util.TimeZone;
 import java.util.TreeSet;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.logging.Logger;
 
 import javax.ws.rs.GET;
 import javax.ws.rs.Path;
 import javax.ws.rs.Produces;
 import javax.ws.rs.QueryParam;
+import javax.ws.rs.WebApplicationException;
 import javax.ws.rs.core.Response;
 
 import com.brocktek.farm.BrocktekMonitoring;
 import com.brocktek.farm.model.Barn;
 import com.brocktek.farm.model.BarnUpdate;
-import com.brocktek.farm.prevalence.MockPrevaylerService;
-import com.brocktek.farm.prevalence.PrevaylerService;
+import com.brocktek.farm.monitoring.MonitoringService;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonArray;
@@ -31,55 +31,46 @@ import com.google.gson.JsonSerializer;
 
 @Path("/barns")
 public class BarnResource {
+	private static final Logger LOGGER = Logger.getLogger(BarnResource.class.getName());
 	private static final Gson basicGson;
 	private static final Gson detailGson;
 	static {
 		GsonBuilder builder = new GsonBuilder();
 		builder.registerTypeAdapter(TableData.class, new TableDataSerializer());
 		builder.registerTypeAdapter(Barn.class, new BasicBarnSerializer());
-		builder.setPrettyPrinting();
 		basicGson = builder.create();
 
 		builder = new GsonBuilder();
 		builder.registerTypeAdapter(ChartData.class, new ChartDataSerializer());
-		builder.setPrettyPrinting();
 		detailGson = builder.create();
 	}
 
-	private static final List<Barn> mockBarnList = MockPrevaylerService.getMockBarnList();
-	private static final Map<Long, Barn> mockBarnMap;
-	static {
-		mockBarnMap = new ConcurrentHashMap<Long, Barn>();
-		for (Barn barn : mockBarnList) {
-			mockBarnMap.put(barn.getAddress64(), barn);
-		}
-	}
-
-	private static PrevaylerService prevaylerService = BrocktekMonitoring.prevaylerService;
+	private static MonitoringService monitoringrService = BrocktekMonitoring.monitoringService;
 
 	@GET
-	@Path("/")
 	@Produces("application/json")
 	public Response getBarns() {
-		return Response.ok(basicGson.toJson(new TableData(prevaylerService.getBarnsAsList())), "application/json").build();
+		try {
+			return Response.ok(basicGson.toJson(new TableData(monitoringrService.getBarnsAsList())), "application/json").build();
+		} catch (Exception e) {
+			LOGGER.severe(e.getMessage());
+			throw new WebApplicationException(e.getMessage());
+		}
 	}
 
 	@GET
 	@Path("/history")
 	@Produces("application/json")
-	public Response getBarnData(@QueryParam("address") String address64, @QueryParam("days") int length) {
-		Instant startInstant = Instant.now().minus(length, ChronoUnit.DAYS);
-		Barn barn = prevaylerService.getBarn(Long.parseLong(address64, 16));
-		SortedSet<BarnUpdate> barnUpdateSet = barn.getUpdateSet().tailSet(new BarnUpdate(startInstant, 0.0, 0.0));
-		SortedSet<BarnUpdate> chartDataSet = new TreeSet<BarnUpdate>();
-		for (BarnUpdate update : barnUpdateSet) {
-			chartDataSet.add(update);
+	public Response getBarnData(@QueryParam("address") String address64) {
+		try {
+			Barn barn = monitoringrService.getBarn(Long.parseLong(address64, 16));
+			ChartData chartData = new ChartData(barn.getUpdateSet());
+			chartData.getUpdateSet().add(new BarnUpdate(Instant.now(), barn.getWetBulbTemp(), barn.getDryBulbTemp()));
+			return Response.ok(detailGson.toJson(chartData), "application/json").build();
+		} catch (Exception e) {
+			LOGGER.severe(e.getMessage());
+			throw new WebApplicationException(e.getMessage());
 		}
-		ChartData chartData = new ChartData(chartDataSet);
-		if (chartData.getUpdateSet().first().getTimestamp().compareTo(startInstant) > 0)
-			chartData.getUpdateSet().add(new BarnUpdate(startInstant, 0.0, 0.0));
-		chartData.getUpdateSet().add(new BarnUpdate(Instant.now(), barn.getWetBulbTemp(), barn.getDryBulbTemp()));
-		return Response.ok(detailGson.toJson(chartData), "application/json").build();
 	}
 
 	private static class TableData {
@@ -97,8 +88,10 @@ public class BarnResource {
 	private static class ChartData {
 		private SortedSet<BarnUpdate> updateSet;
 
-		public ChartData(SortedSet<BarnUpdate> updateList) {
-			this.updateSet = updateList;
+		public ChartData(SortedSet<BarnUpdate> updateSet) {
+			this.updateSet = new TreeSet<BarnUpdate>();
+			for (BarnUpdate update : updateSet)
+				this.updateSet.add(update);
 		}
 
 		public SortedSet<BarnUpdate> getUpdateSet() {
@@ -129,7 +122,6 @@ public class BarnResource {
 			jsonObject.addProperty("address", String.format("%16s", Long.toHexString(src.getAddress64()).toUpperCase()).replace(" ", "0"));
 			jsonObject.addProperty("id", src.getId());
 			jsonObject.addProperty("status", src.isOnline() ? "Online" : "Offline");
-			jsonObject.addProperty("alert", Instant.now().minus(4, ChronoUnit.HOURS).compareTo(src.getTimestamp()) > 0 ? true : false);
 			jsonObject.addProperty("wetBulbTemp", String.format("%1$,.1f&degF", src.getWetBulbTemp()));
 			jsonObject.addProperty("dryBulbTemp", String.format("%1$,.1f&degF", src.getDryBulbTemp()));
 			return jsonObject;
@@ -142,21 +134,18 @@ public class BarnResource {
 		public JsonElement serialize(ChartData src, Type typeOfSrc, JsonSerializationContext context) {
 			JsonObject jsonObject = new JsonObject();
 
-			JsonArray wetBulbSeriesArray = new JsonArray();
-			JsonArray dryBulbSeriesArray = new JsonArray();
-
+			JsonArray timestampData = new JsonArray();
+			JsonArray wetBulbData = new JsonArray();
+			JsonArray dryBulbData = new JsonArray();
+			int offset = TimeZone.getDefault().getOffset(Instant.now().toEpochMilli());
 			for (BarnUpdate update : src.getUpdateSet()) {
-				JsonArray wetBulbDataPoint = new JsonArray();
-				JsonArray dryBulbDataPoint = new JsonArray();
-				wetBulbDataPoint.add(new JsonPrimitive(update.getTimestamp().toEpochMilli()));
-				dryBulbDataPoint.add(new JsonPrimitive(update.getTimestamp().toEpochMilli()));
-				wetBulbDataPoint.add(new JsonPrimitive(update.getWetBulbTemp()));
-				dryBulbDataPoint.add(new JsonPrimitive(update.getDryBulbTemp()));
-				wetBulbSeriesArray.add(wetBulbDataPoint);
-				dryBulbSeriesArray.add(dryBulbDataPoint);
+				timestampData.add(new JsonPrimitive(update.getTimestamp().toEpochMilli() + offset));
+				wetBulbData.add(new JsonPrimitive((new BigDecimal(update.getWetBulbTemp())).setScale(2, BigDecimal.ROUND_HALF_UP)));
+				dryBulbData.add(new JsonPrimitive((new BigDecimal(update.getDryBulbTemp())).setScale(2, BigDecimal.ROUND_HALF_UP)));
 			}
-			jsonObject.add("wetBulbSeries", wetBulbSeriesArray);
-			jsonObject.add("dryBulbSeries", dryBulbSeriesArray);
+			jsonObject.add("timestampData", timestampData);
+			jsonObject.add("wetBulbData", wetBulbData);
+			jsonObject.add("dryBulbData", dryBulbData);
 
 			return jsonObject;
 		}

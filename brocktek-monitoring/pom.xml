@@ -11,17 +11,7 @@
 		<dependency>
 			<groupId>org.glassfish.jersey.containers</groupId>
 			<artifactId>jersey-container-grizzly2-http</artifactId>
-			<version>2.9</version>
-		</dependency>
-		<dependency>
-			<groupId>org.glassfish.jersey.ext</groupId>
-			<artifactId>jersey-mvc-freemarker</artifactId>
-			<version>2.9</version>
-		</dependency>
-		<dependency>
-			<groupId>com.google.inject</groupId>
-			<artifactId>guice</artifactId>
-			<version>3.0</version>
+			<version>2.11</version>
 		</dependency>
 		<dependency>
 			<groupId>com.google.code.gson</groupId>
@@ -42,22 +32,17 @@
 			<groupId>org.prevayler</groupId>
 			<artifactId>prevayler-factory</artifactId>
 			<version>2.6</version>
-		</dependency>
-		<dependency>
-			<groupId>junit</groupId>
-			<artifactId>junit</artifactId>
-			<version>4.8.1</version>
-			<scope>test</scope>
-		</dependency>
+		</dependency>		
 		<dependency>
 			<groupId>com.brocktek.pan</groupId>
 			<artifactId>xbee</artifactId>
 			<version>1.0.0</version>
 		</dependency>
 		<dependency>
-			<groupId>com.brocktek.problem</groupId>
-			<artifactId>problem</artifactId>
-			<version>1.0.0</version>
+			<groupId>junit</groupId>
+			<artifactId>junit</artifactId>
+			<version>4.8.1</version>
+			<scope>test</scope>
 		</dependency>
 	</dependencies>
 

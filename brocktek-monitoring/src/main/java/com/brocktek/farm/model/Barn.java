@@ -2,7 +2,6 @@ package com.brocktek.farm.model;
 
 import java.io.Serializable;
 import java.time.Instant;
-import java.util.NoSuchElementException;
 import java.util.SortedSet;
 import java.util.TreeSet;
 
@@ -10,8 +9,11 @@ import com.brocktek.xbee.XbeeNode;
 
 public class Barn extends XbeeNode implements Serializable, Comparable<Barn> {
 	private static final long serialVersionUID = -901361627723043662L;
+	public static boolean ONLINE = true;
+	public static boolean OFFLINE = false;
 
 	private SortedSet<BarnUpdate> updateSet = new TreeSet<BarnUpdate>();
+
 	private Instant timestamp;
 	private double wetBulbTemp;
 	private double dryBulbTemp;
@@ -30,50 +32,40 @@ public class Barn extends XbeeNode implements Serializable, Comparable<Barn> {
 		return this.timestamp;
 	}
 
+	public void setTimestamp(Instant timestamp) {
+		this.timestamp = timestamp;
+	}
+
 	public boolean isOnline() {
 		return this.online;
+	}
+
+	public void setOnline(boolean online) {
+		this.online = online;
 	}
 
 	public double getWetBulbTemp() {
 		return this.wetBulbTemp;
 	}
 
+	public void setWetBulbTemp(double wetBulbTemp) {
+		this.wetBulbTemp = wetBulbTemp;
+	}
+
 	public double getDryBulbTemp() {
 		return this.dryBulbTemp;
+	}
+
+	public void setDryBulbTemp(double dryBulbTemp) {
+		this.dryBulbTemp = dryBulbTemp;
 	}
 
 	public SortedSet<BarnUpdate> getUpdateSet() {
 		return updateSet;
 	}
 
-	public void updateStatus(Instant timestamp, boolean online) {
-		this.timestamp = timestamp;
+	public void updateStatus(boolean online) {
 		this.online = online;
-
-		try {
-			if (timestamp.compareTo(updateSet.last().getTimestamp().plusSeconds(60)) > 0)
-				updateSet.add(new BarnUpdate(timestamp, 0, 0));
-			if (updateSet.size() > 10080)
-				updateSet.remove(updateSet.first());
-		} catch (NoSuchElementException e) {
-			updateSet.add(new BarnUpdate(timestamp, 0, 0));
-		}
-	}
-
-	public void updateTemperature(Instant timestamp, double wetBulbTemp, double dryBulbTemp) {
-		this.timestamp = timestamp;
-		this.online = true;
-		this.wetBulbTemp = wetBulbTemp;
-		this.dryBulbTemp = dryBulbTemp;
-
-		try {
-			if (timestamp.compareTo(updateSet.last().getTimestamp().plusSeconds(60)) > 0)
-				updateSet.add(new BarnUpdate(timestamp, wetBulbTemp, dryBulbTemp));
-			if (updateSet.size() > 10080)
-				updateSet.remove(updateSet.first());
-		} catch (NoSuchElementException e) {
-			updateSet.add(new BarnUpdate(timestamp, wetBulbTemp, dryBulbTemp));
-		}
 	}
 
 	@Override
@@ -81,7 +73,7 @@ public class Barn extends XbeeNode implements Serializable, Comparable<Barn> {
 		if (id != null) {
 			return id;
 		}
-		return String.format("%16s", Long.toHexString(this.getAddress64()).replace(" ", "0").toUpperCase());
+		return ("[id: " + id + "address: " + String.format("%16s", Long.toHexString(this.getAddress64()).replace(" ", "0").toUpperCase()) + "]");
 	}
 
 	@Override
